@@ -41,6 +41,7 @@ crates-index = "0.18.1"
 semver = "1.0.4"
 xz2 = "0.1.6"
 zip = "0.5.13"
+github_v3 = "1.0.0"
 
 [dev-dependencies]
 env_logger = "0.9.0"

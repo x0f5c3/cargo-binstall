@@ -97,32 +97,61 @@ async fn main() -> Result<(), anyhow::Error> {
     let manifest = load_manifest_path(manifest_path.join("Cargo.toml"))?;
     let package = manifest.package.unwrap();
 
-    let (mut meta, binaries) = (
-        package.metadata.map(|m| m.binstall ).flatten().unwrap_or(PkgMeta::default()),
-        manifest.bin,
-    );
-
-    // Merge any overrides
-    if let Some(o) = meta.overrides.remove(&opts.target) {
-        meta.merge(&o);
-    }
-
-    debug!("Found metadata: {:?}", meta);
-
-    // Generate context for URL interpolation
-    let ctx = Context { 
+    // Generate context for future interpolation
+    let mut ctx = Context { 
         name: opts.name.clone(), 
-        repo: package.repository, 
+        repo: package.repository.clone(), 
         target: opts.target.clone(), 
         version: package.version.clone(),
-        format: meta.pkg_fmt.to_string(),
+        format: "".to_string(),
         bin: None,
     };
 
+    // Extract binstall metadata if available
+    let binstall_meta = package.metadata.map(|m| m.binstall ).flatten();
+
+    // Determine package information
+    let pkg_info = match (binstall_meta, package.repository) {
+        // Prefer Cargo.toml metadata
+        (Some(mut meta), _) => {
+            debug!("Found binstall metadata, generating URL");
+
+            // Update package format if set
+            ctx.format = meta.pkg_fmt.to_string();
+
+            // Merge any CLI overrides
+            if let Some(o) = meta.overrides.remove(&opts.target) {
+                meta.merge(&o);
+            }
+
+            let package_url = ctx.render(&meta.pkg_url)?;
+            let package_fmt = meta.pkg_fmt;
+            let bin_dir = meta.bin_dir;
+
+            Some((package_url, package_fmt, bin_dir))
+        },
+        // Fetch releases from github if possible
+        (_, Some(repo)) if repo.starts_with("https://github.com") => {
+
+
+            todo!()
+        }
+        _ => {
+            debug!("No binstall metadata found");
+
+            None
+        },
+    };
+
+    let (rendered, pkg_fmt, bin_dir) = match pkg_info {
+        Some(r) => r,
+        None => {
+            return Err(anyhow::anyhow!("Unable to locate download URL"));
+        }
+    };
+    let binaries = manifest.bin;
+
     debug!("Using context: {:?}", ctx);
-    
-    // Interpolate version / target / etc.
-    let rendered = ctx.render(&meta.pkg_url)?;
 
     // Compute install directory
     let install_path = match get_install_path(opts.install_path.as_deref()) {
@@ -138,7 +167,7 @@ async fn main() -> Result<(), anyhow::Error> {
     info!("Downloading package from: '{}'", rendered);
 
     // Download package
-    let pkg_path = temp_dir.path().join(format!("pkg-{}.{}", opts.name, meta.pkg_fmt));
+    let pkg_path = temp_dir.path().join(format!("pkg-{}.{}", opts.name, ctx.format));
     download(&rendered, pkg_path.to_str().unwrap()).await?;
 
     #[cfg(incomplete)]
@@ -168,7 +197,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Extract files
     let bin_path = temp_dir.path().join(format!("bin-{}", opts.name));
-    extract(&pkg_path, meta.pkg_fmt, &bin_path)?;
+    extract(&pkg_path, pkg_fmt, &bin_path)?;
 
     // Bypass cleanup if disabled
     if opts.no_cleanup {
@@ -198,8 +227,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
         // Generate install paths
         // Source path is the download dir + the generated binary path
-        let source_file_path = bin_ctx.render(&meta.bin_dir)?;
-        let source = if meta.pkg_fmt == PkgFmt::Bin {
+        let source_file_path = bin_ctx.render(&bin_dir)?;
+        let source = if pkg_fmt == PkgFmt::Bin {
             bin_path.clone()
         } else {
             bin_path.join(&source_file_path)
@@ -268,3 +297,7 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+fn install_package(opts: &Options, url: &str) -> Result<(), anyhow::Error> {
+
+    todo!()
+}
