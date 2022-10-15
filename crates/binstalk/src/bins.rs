@@ -67,7 +67,7 @@ pub fn infer_bin_dir_template(data: &Data) -> Cow<'static, str> {
 }
 
 pub struct BinFile {
-    pub base_name: CompactString,
+    pub base_name: String,
     pub source: PathBuf,
     pub dest: PathBuf,
     pub link: Option<PathBuf>,
@@ -136,7 +136,7 @@ impl BinFile {
         };
 
         Ok(Self {
-            base_name: CompactString::from(base_name),
+            base_name: base_name.into(),
             source,
             dest,
             link,

@@ -90,7 +90,7 @@ async fn install_from_package(
         }
 
         Ok(Some(
-            bin_files.into_iter().map(|bin| bin.base_name).collect(),
+            bin_files.into_iter().map(|bin| bin.base_name.into()).collect(),
         ))
     })
 }
